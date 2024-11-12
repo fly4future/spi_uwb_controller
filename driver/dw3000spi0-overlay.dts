@@ -1,0 +1,47 @@
+/dts-v1/;
+/plugin/;
+
+/* Overlay for DW3000 IEEE 802.15.4 WPAN transceiver on spi1.0 */
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&gpio>;
+		__overlay__ {
+			lowpan1_pins: lowpan1_pins {
+				brcm,pins = <26>;
+				brcm,function = <0>; /* INPUT */
+				brcm,pull = <1>;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&spi0>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			status = "okay";
+
+			lowpan1: dw3000@0 {
+				compatible = "qorvo,dw3000";
+
+				pinctrl-names = "default";
+				pinctrl-0 = <&lowpan1_pins>;
+
+				reg = <0>;
+				interrupt-parent = <&gpio>;
+				interrupts = <26 1>; /* active high */
+				spi-max-frequency = <32000000>;
+			};
+		};
+	};
+
+	__overrides__ {
+		interrupt  = <&lowpan1_pins>, "brcm,pins:0",
+			   		 <&lowpan1>, "interrupts:0";
+		speed      = <&lowpan1>, "spi-max-frequency:0";
+	};
+};
