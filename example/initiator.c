@@ -440,7 +440,6 @@ int main(int argc, char *argv[]) {
       req.tv_sec = 0;
       req.tv_nsec = 20*1000*1000;
 
-      goto exit;
       nanosleep(&req, &rem);
     }
 
