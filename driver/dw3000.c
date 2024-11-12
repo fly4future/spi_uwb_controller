@@ -1161,11 +1161,13 @@ static void dw3000_xmit_work(struct work_struct *work) {
     if (checkTxOk & (SYS_STATUS_HPDWARN_BIT_MASK >>
                      24)) // Transmit Delayed Send set over Half a Period away.
     {
+      printk(KERN_INFO "DW3000: Transmit Delayed Send set over Half a Period "
+                       "away. TX will be sent in the next half period\n");
       goto tx_error;
     } else {
       u32 sys_state;
-      rc |= dw3000_read32bit(lp, PARSE_ADDRESS(SYS_STATE_LO_ID, 0), &sys_state);
-      if (sys_state == DW_SYS_STATE_TXERR)
+      rc |= dw3000_read8bit(lp, PARSE_ADDRESS(SYS_STATE_LO_ID, 2), &sys_state);
+      if (sys_state == (DW_SYS_STATE_TXERR >> 16))
         goto tx_error;
     }
   }
@@ -1188,9 +1190,6 @@ static void dw3000_xmit_work(struct work_struct *work) {
   }
 
   // setup timer for tx check
-
-  print_hex_dump_bytes("DW3000 TX buffer: ", DUMP_PREFIX_OFFSET, skb->data,
-                       skb->len);
   return;
 
 tx_error:
@@ -1199,7 +1198,8 @@ tx_error:
   rc |= dw3000_sync_write_command(lp, CMD_TXRXOFF);
   rc |= dw3000_sync_write_command(lp, CMD_RX);
 
-  ieee802154_xmit_error(lp->hw, skb, IEEE802154_SYSTEM_ERROR);
+  if(skb)
+    ieee802154_xmit_error(lp->hw, skb, IEEE802154_SYSTEM_ERROR);
 
   return;
 }
