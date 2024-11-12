@@ -1,0 +1,25 @@
+From 886a8f5a67b469fa6af12ed9a09f79409db49f48 Mon Sep 17 00:00:00 2001
+From: Vit Petrik <vit.petrik@gmail.com>
+Date: Tue, 12 Nov 2024 19:28:52 +0100
+Subject: [PATCH 2/2] Set SKBTX_HW_TSTAMP flag
+
+---
+ net/ieee802154/socket.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/ieee802154/socket.c b/net/ieee802154/socket.c
+index 045a322ce5bf..8e9273c9f4f8 100644
+--- a/net/ieee802154/socket.c
++++ b/net/ieee802154/socket.c
+@@ -689,6 +689,8 @@ static int dgram_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
+ 		}
+ 	}
+ 
++	shinfo->tx_flags |= SKBTX_HW_TSTAMP;
++
+ 	err = wpan_dev_hard_header(skb, dev, &dst_addr,
+ 				   ro->bound ? &ro->src_addr : NULL, size);
+ 	if (err < 0)
+-- 
+2.39.5
+

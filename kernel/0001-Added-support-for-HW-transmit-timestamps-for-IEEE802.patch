@@ -1,7 +1,7 @@
 From 4147f19d2dcd5e8d159c470da916c1c196be70ec Mon Sep 17 00:00:00 2001
 From: vitpetrik <vit.petrik@gmail.com>
 Date: Tue, 12 Nov 2024 15:31:22 +0100
-Subject: [PATCH] Added support for HW transmit timestamps for IEEE802154
+Subject: [PATCH 1/2] Added support for HW transmit timestamps for IEEE802154
  socket
 
 ---
@@ -48,5 +48,5 @@ index 00302e8b9615..045a322ce5bf 100644
  	if (!skb)
  		goto out;
 -- 
-2.41.0
+2.39.5
 
