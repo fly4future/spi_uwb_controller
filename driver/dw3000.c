@@ -925,7 +925,7 @@ static irqreturn_t dw3000_isr_thr(int irq, void *data) {
   }
 
   if (fint & FINT_STAT_TXOK_BIT_MASK &&
-      sys_status & SYS_STATUS_TXFRS_BIT_MASK) {
+      sys_status & SYS_STATUS_TXFRS_BIT_MASK && lp->xmit_busy) {
     irq_handled = 1;
     lp->xmit_busy = 0;
 
@@ -1171,11 +1171,11 @@ static void dw3000_xmit_work(struct work_struct *work) {
         goto tx_error;
     }
   }
+  lp->xmit_busy = 1;
 
   hrtimer_start(&lp->tx_check_timer, ktime_set(0, 100 * 1000 * 1000),
                 HRTIMER_MODE_REL);
 
-  lp->xmit_busy = 1;
 
   if (request_ts) {
     shinfo->tx_flags |= SKBTX_IN_PROGRESS;
@@ -1197,6 +1197,8 @@ tx_error:
 
   rc |= dw3000_sync_write_command(lp, CMD_TXRXOFF);
   rc |= dw3000_sync_write_command(lp, CMD_RX);
+
+  lp->xmit_busy = 0;
 
   if(skb)
     ieee802154_xmit_error(lp->hw, skb, IEEE802154_SYSTEM_ERROR);
