@@ -1,0 +1,52 @@
+From 4147f19d2dcd5e8d159c470da916c1c196be70ec Mon Sep 17 00:00:00 2001
+From: vitpetrik <vit.petrik@gmail.com>
+Date: Tue, 12 Nov 2024 15:31:22 +0100
+Subject: [PATCH] Added support for HW transmit timestamps for IEEE802154
+ socket
+
+---
+ net/ieee802154/socket.c | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/net/ieee802154/socket.c b/net/ieee802154/socket.c
+index 00302e8b9615..045a322ce5bf 100644
+--- a/net/ieee802154/socket.c
++++ b/net/ieee802154/socket.c
+@@ -674,6 +674,21 @@ static int dgram_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
+ 	cb->seclevel = ro->seclevel;
+ 	cb->seclevel_override = ro->seclevel_override;
+ 
++	struct cmsghdr *cmsg;
++	struct skb_shared_info *shinfo = skb_shinfo(skb);
++
++	for_each_cmsghdr(cmsg, msg) {
++		if (!CMSG_OK(msg, cmsg))
++			continue;
++		if (cmsg->cmsg_type == SCM_TXTIME) {	
++			skb->skb_mstamp_ns = *((u64 *)CMSG_DATA(cmsg));
++			shinfo->tx_flags |= SKBTX_SCHED_TSTAMP;
++		}
++		if (cmsg->cmsg_type == SO_TYPE) {	
++			cb->type = *((u8 *)CMSG_DATA(cmsg));
++		}
++	}
++
+ 	err = wpan_dev_hard_header(skb, dev, &dst_addr,
+ 				   ro->bound ? &ro->src_addr : NULL, size);
+ 	if (err < 0)
+@@ -711,6 +726,12 @@ static int dgram_recvmsg(struct sock *sk, struct msghdr *msg, size_t len,
+ 	struct dgram_sock *ro = dgram_sk(sk);
+ 	DECLARE_SOCKADDR(struct sockaddr_ieee802154 *, saddr, msg->msg_name);
+ 
++	sk->sk_tsflags |= SOF_TIMESTAMPING_RAW_HARDWARE;
++
++	if (flags & MSG_ERRQUEUE)
++		return sock_recv_errqueue(sk, msg, len,
++					  SOL_SOCKET, 1);
++
+ 	skb = skb_recv_datagram(sk, flags, &err);
+ 	if (!skb)
+ 		goto out;
+-- 
+2.41.0
+
