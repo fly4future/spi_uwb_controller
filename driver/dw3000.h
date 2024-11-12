@@ -46,6 +46,9 @@ typedef enum
 #define DWT_DW_IDLE      0x1
 #define DWT_DW_IDLE_RC   0x2
 
+// SYS_STATE_LO register errors
+#define DW_SYS_STATE_TXERR          0xD0000         // TSE is in TX but TX is in IDLE in SYS_STATE_LO register
+
 //DW3000 OTP operating parameter set selection
 #define DWT_OPSET_LONG   (0x0<<11)
 #define DWT_OPSET_SCP    (0x1<<11)

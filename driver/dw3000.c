@@ -869,7 +869,8 @@ static irqreturn_t dw3000_isr_thr(int irq, void *data) {
 
   rc |= dw3000_read8bit(lp, PARSE_ADDRESS(FINT_STAT_ID, 0), &fint);
 
-  printk(KERN_INFO "DW3000 FINT_STAT: 0x%X SYS_STATUS: 0x%04X\n", fint, sys_status);
+  printk(KERN_INFO "DW3000 FINT_STAT: 0x%X SYS_STATUS: 0x%04X\n", fint,
+         sys_status);
 
   u8 irq_handled = 0;
 
@@ -918,7 +919,8 @@ static irqreturn_t dw3000_isr_thr(int irq, void *data) {
 
       ieee802154_rx_irqsafe(lp->hw, skb, lqi);
 
-      print_hex_dump_bytes("DW3000 RX buffer: ", DUMP_PREFIX_OFFSET, data, rx_len - 2);
+      print_hex_dump_bytes("DW3000 RX buffer: ", DUMP_PREFIX_OFFSET, data,
+                           rx_len - 2);
     }
   }
 
@@ -933,7 +935,9 @@ static irqreturn_t dw3000_isr_thr(int irq, void *data) {
     struct sk_buff *skb = lp->tx_skb;
     struct skb_shared_info *shinfo = skb_shinfo(skb);
 
-    u8 request_ts = shinfo->tx_flags & SKBTX_HW_TSTAMP && shinfo->tx_flags & SKBTX_IN_PROGRESS && !(shinfo->tx_flags & SKBTX_SCHED_TSTAMP);
+    u8 request_ts = shinfo->tx_flags & SKBTX_HW_TSTAMP &&
+                    shinfo->tx_flags & SKBTX_IN_PROGRESS &&
+                    !(shinfo->tx_flags & SKBTX_SCHED_TSTAMP);
 
     if (request_ts) {
       struct skb_shared_hwtstamps hwtstamps;
@@ -1115,13 +1119,13 @@ static void dw3000_xmit_work(struct work_struct *work) {
   struct sk_buff *skb = lp->tx_skb;
   struct skb_shared_info *shinfo = skb_shinfo(skb);
 
-  // write TX 
+  // write TX
   rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, 0), skb->data, skb->len);
 
   u8 delayed_tx = shinfo->tx_flags & SKBTX_SCHED_TSTAMP;
   u8 request_ts = !delayed_tx && shinfo->tx_flags & SKBTX_HW_TSTAMP;
 
-    // write TX cntrl
+  // write TX cntrl
   u32 ranging = delayed_tx | request_ts ? 1 : 0;
   u32 txFrameLength = skb->len + 2;
   u32 txBufferOffset = 0;
@@ -1140,12 +1144,31 @@ static void dw3000_xmit_work(struct work_struct *work) {
     u32 ts = skb->skb_mstamp_ns;
     ts = cpu_to_le32(ts);
     rc |= dw3000_write32bit(lp, PARSE_ADDRESS(DX_TIME_ID, 0), ts);
+
+    dw3000_write8bit(lp, PARSE_ADDRESS(SYS_STATUS_ID, 3),
+                     (SYS_STATUS_HPDWARN_BIT_MASK >> 24));
   }
-  
+
   // write TX start
 
-  rc |= dw3000_sync_write_command(lp, delayed_tx ? CMD_DTX_W4R : CMD_TX_W4R);
   enable_irq(lp->spi->irq);
+  rc |= dw3000_sync_write_command(lp, delayed_tx ? CMD_DTX_W4R : CMD_TX_W4R);
+
+  if (delayed_tx) {
+    u32 checkTxOk;
+    rc |= dw3000_read8bit(lp, PARSE_ADDRESS(SYS_STATUS_ID, 3), &checkTxOk);
+
+    if (checkTxOk & (SYS_STATUS_HPDWARN_BIT_MASK >>
+                     24)) // Transmit Delayed Send set over Half a Period away.
+    {
+      goto tx_error;
+    } else {
+      u32 sys_state;
+      rc |= dw3000_read32bit(lp, PARSE_ADDRESS(SYS_STATE_LO_ID, 0), &sys_state);
+      if (sys_state == DW_SYS_STATE_TXERR)
+        goto tx_error;
+    }
+  }
 
   hrtimer_start(&lp->tx_check_timer, ktime_set(0, 100 * 1000 * 1000),
                 HRTIMER_MODE_REL);
@@ -1158,7 +1181,7 @@ static void dw3000_xmit_work(struct work_struct *work) {
     printk(KERN_INFO "DW3000: TX timestamp is being requested\n");
   }
 
-  if(delayed_tx) {
+  if (delayed_tx) {
     u64 ts = skb->skb_mstamp_ns;
     ts = cpu_to_le64(ts);
     printk(KERN_INFO "DW3000: Delayed TX timestamp %llu\n", ts << 8);
@@ -1166,7 +1189,17 @@ static void dw3000_xmit_work(struct work_struct *work) {
 
   // setup timer for tx check
 
-  print_hex_dump_bytes("DW3000 TX buffer: ", DUMP_PREFIX_OFFSET, skb->data, skb->len);
+  print_hex_dump_bytes("DW3000 TX buffer: ", DUMP_PREFIX_OFFSET, skb->data,
+                       skb->len);
+  return;
+
+tx_error:
+  printk(KERN_INFO "DW3000: TX error\n");
+
+  rc |= dw3000_sync_write_command(lp, CMD_TXRXOFF);
+  rc |= dw3000_sync_write_command(lp, CMD_RX);
+
+  ieee802154_xmit_error(lp->hw, skb, IEEE802154_SYSTEM_ERROR);
 
   return;
 }
