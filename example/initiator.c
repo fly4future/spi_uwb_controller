@@ -125,24 +125,24 @@ ssize_t sendto_ts(int __fd, const void *__buf, size_t __n, int __flags,
   msg.msg_control = cmsg_buf;
   msg.msg_controllen = sizeof(cmsg_buf);
 
-  fd_set rfds, wfds, efds;
+  fd_set rfds;
 
   FD_ZERO(&rfds);
-  FD_ZERO(&wfds);
-  FD_ZERO(&efds);
+  FD_SET(__fd, &rfds);
 
-  // 	FD_SET(__fd, &rfds);
-  // 	FD_SET(__fd, &wfds);
-  FD_SET(__fd, &efds);
+  struct timeval tv;
+  fd_set set;
+  tv.tv_sec = 0;
+  tv.tv_usec = 500 * 1000;
 
-  ret = select(__fd + 1, &rfds, &wfds, &efds, NULL);
+  ret = select(__fd + 1, &rfds, NULL, NULL, &tv);
 
   if (ret < 0) {
     printf("select error\n");
     return ret;
   }
 
-  *txtime = -1; 
+  *txtime = -1;
 
   while((ret = recvmsg(__fd, &msg, MSG_ERRQUEUE)))
   {

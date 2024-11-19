@@ -10,7 +10,7 @@ ssize_t sendto_delayed(int __fd, const void *__buf, size_t __n, int __flags,
                        uint64_t txtime) {
   struct msghdr msg;
   struct iovec iov;
-  char cmsg_buf[CMSG_SPACE(sizeof(uint64_t))];
+  char cmsg_buf[CMSG_SPACE(sizeof(u_int64_t))];
 
   memset(&msg, 0, sizeof(msg));
   memset(&iov, 0, sizeof(iov));
@@ -68,15 +68,17 @@ ssize_t sendto_ts(int __fd, const void *__buf, size_t __n, int __flags,
   msg.msg_control = cmsg_buf;
   msg.msg_controllen = sizeof(cmsg_buf);
 
-  fd_set rfds, wfds, efds;
+  fd_set rfds;
 
   FD_ZERO(&rfds);
-  FD_ZERO(&wfds);
-  FD_ZERO(&efds);
+  FD_SET(__fd, &rfds);
 
-  FD_SET(__fd, &efds);
+  struct timeval tv;
+  fd_set set;
+  tv.tv_sec = 0;
+  tv.tv_usec = 500 * 1000;
 
-  ret = select(__fd + 1, &rfds, &wfds, &efds, NULL);
+  ret = select(__fd + 1, &rfds, NULL, NULL, &tv);
 
   if (ret < 0) {
     printf("select error\n");
@@ -85,14 +87,15 @@ ssize_t sendto_ts(int __fd, const void *__buf, size_t __n, int __flags,
 
   *txtime = -1;
 
-  while ((ret = recvmsg(__fd, &msg, MSG_ERRQUEUE))) {
+  while((ret = recvmsg(__fd, &msg, MSG_ERRQUEUE)))
+  {
     if (ret < 0 || txtime == NULL)
       return 0;
 
     struct cmsghdr *cmsg;
 
     for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
-         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        cmsg = CMSG_NXTHDR(&msg, cmsg)) {
       if (cmsg->cmsg_level == SOL_SOCKET &&
           cmsg->cmsg_type == SO_TIMESTAMPING_NEW) {
         struct timespec *timestamp = (struct timespec *)CMSG_DATA(cmsg);
