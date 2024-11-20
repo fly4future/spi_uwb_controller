@@ -75,6 +75,8 @@ struct dw3000_local {
   struct spi_device *spi;
   struct ieee802154_hw *hw;
 
+  int speed_default;
+
   struct dw3000_config_t config;
 
   int irq_counter;
@@ -1427,9 +1429,11 @@ static int dw3000_probe(struct spi_device *spi) {
   int rc, irq_type;
   u8 xtal_trim;
 
-  printk(KERN_INFO "DW3000: Max SPI speed: %d Hz\n", spi->max_speed_hz);
+  lp->speed_default = spi->max_speed_hz;
 
-  spi->max_speed_hz = 1000000;
+  printk(KERN_INFO "DW3000: Max SPI speed: %d Hz\n", lp->speed_default);
+
+  spi->max_speed_hz = lp->speed_default < 1000000 ? lp->speed_default : 1000000;
 
   if (!spi->irq) {
     dev_err(&spi->dev, "no IRQ specified\n");
@@ -1532,7 +1536,7 @@ static int dw3000_probe(struct spi_device *spi) {
     }
   }
 
-  spi->max_speed_hz = 36000000;
+  spi->max_speed_hz = lp->speed_default;
 
   u32 dev_id;
   rc |= dw3000_read32bit(lp, PARSE_ADDRESS(DEV_ID_ID, 0), &dev_id);
