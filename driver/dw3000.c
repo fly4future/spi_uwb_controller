@@ -1429,12 +1429,6 @@ static int dw3000_probe(struct spi_device *spi) {
   int rc, irq_type;
   u8 xtal_trim;
 
-  lp->speed_default = spi->max_speed_hz;
-
-  printk(KERN_INFO "DW3000: Max SPI speed: %d Hz\n", lp->speed_default);
-
-  spi->max_speed_hz = lp->speed_default < 1000000 ? lp->speed_default : 1000000;
-
   if (!spi->irq) {
     dev_err(&spi->dev, "no IRQ specified\n");
     return -EINVAL;
@@ -1462,6 +1456,10 @@ static int dw3000_probe(struct spi_device *spi) {
 
   INIT_WORK(&lp->xmit_work, dw3000_xmit_work);
   INIT_WORK(&lp->xmit_check_tx_work, dw3000_tx_check_work);
+
+  lp->speed_default = spi->max_speed_hz;
+  printk(KERN_INFO "DW3000: Max SPI speed: %d Hz\n", lp->speed_default);
+  spi->max_speed_hz = lp->speed_default < 1000000 ? lp->speed_default : 1000000;
 
   spi_set_drvdata(spi, lp);
 
@@ -1541,11 +1539,11 @@ static int dw3000_probe(struct spi_device *spi) {
   u32 dev_id;
   rc |= dw3000_read32bit(lp, PARSE_ADDRESS(DEV_ID_ID, 0), &dev_id);
 
-  printk(KERN_INFO "Device ID: %x\n", dev_id);
+  printk(KERN_INFO "Device ID: 0x%X\n", dev_id);
 
-  if (dev_id != 0xdeca0302) {
-    dev_err(&spi->dev, "Invalid device ID: %x\n", dev_id);
-    dev_err(&spi->dev, "Expected: 0xdeca0302\n");
+  if (dev_id != 0xDECA0302) {
+    dev_err(&spi->dev, "Invalid device ID: 0x%X\n", dev_id);
+    dev_err(&spi->dev, "Expected: 0xDECA0302\n");
     dev_err(&spi->dev, "Please check your connections\n");
     rc = -ENODEV;
     goto free_dev;
@@ -1579,7 +1577,10 @@ free_dev:
   disable_irq(spi->irq);
   devm_free_irq(&spi->dev, spi->irq, lp);
   if (lp->hw)
+  {
+    spi->max_speed_hz = lp->speed_default;
     ieee802154_free_hw(lp->hw);
+  }
 
   return rc;
 }
