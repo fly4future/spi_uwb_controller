@@ -11,6 +11,7 @@
 #include "active_radar.h"
 #include "ranging_client.h"
 #include <active_radar/RangeWithCovarianceIdentified.h>
+#include <sensor_msgs/Range.h>
 
 ros::Rate r = ros::Rate(10);
 
@@ -182,9 +183,17 @@ void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   NODELET_INFO("Range from 0x%X: %.2f m +- %f", id, range, std_dev);
 
   active_radar::RangeWithCovarianceIdentified msg;
+  sensor_msgs::Range *range_msg = &msg.range;
+
+  range_msg->header.stamp = ros::Time::now();
+  range_msg->header.frame_id = "uwb";
+  range_msg->radiation_type = 3;
+  range_msg->field_of_view = 2*M_PI;
+  range_msg->min_range = 0.0;
+  range_msg->max_range = 100.0;
+  range_msg->range = range;
 
   msg.id = id;
-  msg.range.range = range;
   msg.std_dev = std_dev;
 
   this->range_pub.publish(msg);

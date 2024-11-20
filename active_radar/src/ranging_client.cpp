@@ -97,7 +97,7 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
     double tof = ToF_DS(&ranging_pkt);
     double distance = tof * SPEED_OF_LIGHT;
 
-    if (this->range_cb) {
+    if (this->range_cb != nullptr && distance > 0.00 && distance < 100.00) {
       this->range_cb(distance, 0.01);
     }
   }
