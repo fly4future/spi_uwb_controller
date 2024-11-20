@@ -1539,6 +1539,14 @@ static int dw3000_probe(struct spi_device *spi) {
 
   printk(KERN_INFO "Device ID: %x\n", dev_id);
 
+  if (dev_id != 0xdeca0302) {
+    dev_err(&spi->dev, "Invalid device ID: %x\n", dev_id);
+    dev_err(&spi->dev, "Expected: 0xdeca0302\n");
+    dev_err(&spi->dev, "Please check your connections\n");
+    rc = -ENODEV;
+    goto free_dev;
+  }
+
   u32 partID = dw3000_optread(lp, PARTID_ADDRESS);
   u32 lotID = dw3000_optread(lp, LOTID_ADDRESS);
 
