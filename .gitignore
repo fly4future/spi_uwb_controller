@@ -99,3 +99,5 @@ dkms.conf
 .nfs*
 
 *.ko.xz
+
+*.dtbo
