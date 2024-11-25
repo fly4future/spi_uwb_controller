@@ -9,6 +9,7 @@
 #include <thread>
 #include <unordered_map>
 #include <mrs_lib/param_loader.h>
+#include <boost/container/flat_map.hpp>
 
 #include "ranging_client.h"
 
@@ -34,7 +35,7 @@ protected:
 
   std::thread recv_thread;
 
-  std::unordered_map<uint16_t, class RangingClient> clients;
+  boost::container::flat_map<uint16_t, class RangingClient> clients;
 
 public:
   // Constructor and destructor

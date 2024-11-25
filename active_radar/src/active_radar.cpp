@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <unordered_map>
 
 #include "active_radar.h"
 #include "ranging_client.h"
@@ -69,7 +68,7 @@ void ActiveRadarNodelet::onInit() {
     return;
   }
 
-  this->clients = std::unordered_map<uint16_t, RangingClient>();
+  this->clients = boost::container::flat_map<uint16_t, class RangingClient>();
   this->running = true;
 
   uint8_t empty_buf[17 + 1] = {0};
