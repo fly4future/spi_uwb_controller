@@ -9,7 +9,7 @@
 
 #include "active_radar.h"
 #include "ranging_client.h"
-#include <active_radar/RangeWithCovarianceIdentified.h>
+#include <mrs_msgs/RangeWithCovarianceIdentified.h>
 #include <sensor_msgs/Range.h>
 
 ros::Rate r = ros::Rate(10);
@@ -47,7 +47,7 @@ void ActiveRadarNodelet::onInit() {
   pl.loadParam("uwb_pan_id", this->uwb_pan_id);
   pl.loadParam("requests", requests);
 
-  this->range_pub = this->nh.advertise<active_radar::RangeWithCovarianceIdentified>("range", 1);
+  this->range_pub = this->nh.advertise<mrs_msgs::RangeWithCovarianceIdentified>("range", 1);
 
   if (!this->initUWB()) {
     NODELET_ERROR("Failed to initialize UWB");
@@ -181,7 +181,7 @@ bool ActiveRadarNodelet::setTSN() {
 void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   NODELET_INFO("Range from 0x%X: %.2f m +- %f", id, range, std_dev);
 
-  active_radar::RangeWithCovarianceIdentified msg;
+  mrs_msgs::RangeWithCovarianceIdentified msg;
   sensor_msgs::Range *range_msg = &msg.range;
 
   range_msg->header.stamp = ros::Time::now();
@@ -193,7 +193,7 @@ void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   range_msg->range = range;
 
   msg.id = id;
-  msg.std_dev = std_dev;
+  msg.variance = std_dev*std_dev;
 
   this->range_pub.publish(msg);
 
