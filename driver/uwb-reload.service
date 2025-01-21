@@ -1,0 +1,10 @@
+[Unit]
+Description=Reload UWB driver service
+
+[Service]
+Tyep=oneshot
+ExecStart=/home/mrs/git/spi_uwb_controller/driver/reload.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
