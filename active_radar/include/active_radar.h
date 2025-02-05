@@ -32,7 +32,7 @@ protected:
   // UWB related settings
   int uwb_mac_addr;
   int uwb_pan_id;
-  int requests;
+  bool requests;
 
   int uwb_fd;
 
