@@ -248,9 +248,9 @@ void ActiveRadarNodelet::recvThread() {
     uint16_t client_addr = src.addr.short_addr;    
 
     if (this->clients.find(client_addr) == this->clients.end()) {
-      NODELET_INFO("New client detected: 0x%X", client_addr);
 
       bool initiator = this->uwb_mac_addr > client_addr && this->requests;
+      NODELET_INFO("New client detected: 0x%X | Switching to role of %s", client_addr, initiator ? "initiator" : "responder");
 
       // create lambda function to this->rangeCB and pass it to Ranging client
 
