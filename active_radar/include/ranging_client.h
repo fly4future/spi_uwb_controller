@@ -12,6 +12,8 @@ namespace active_radar {
 class RangingClient
 {
     private:
+        bool initiator;
+
         int expected_pkt_num = 0;
         uint64_t txTime;
 
@@ -21,9 +23,11 @@ class RangingClient
         RangingClient() : expected_pkt_num(-1) {}
         ~RangingClient() = default;
 
-        RangingClient(std::function<void(double, double)> cb)  {
+        RangingClient(std::function<void(double, double)> cb, bool initiator)  {
             this->expected_pkt_num = -1;
             this->range_cb = std::move(cb);
+
+            this->initiator = initiator;
         }
 
         std::pair<std::vector<uint8_t>, uint64_t> update(std::vector<uint8_t>& rx_vec, uint64_t rxTime);

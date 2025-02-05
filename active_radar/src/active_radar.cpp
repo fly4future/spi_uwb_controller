@@ -40,12 +40,12 @@ void ActiveRadarNodelet::onInit() {
 
   mrs_lib::ParamLoader pl(this->nh, this->m_node_name);
 
-  bool requests = false;
+  this->requests = true;
 
   // Load parameters
   pl.loadParam("uwb_mac_addr", this->uwb_mac_addr);
   pl.loadParam("uwb_pan_id", this->uwb_pan_id);
-  pl.loadParam("requests", requests);
+  pl.loadParam("requests", this->requests);
 
   this->range_pub = this->nh.advertise<mrs_msgs::RangeWithCovarianceIdentified>("range", 1);
 
@@ -88,16 +88,19 @@ void ActiveRadarNodelet::onInit() {
   while (ros::ok()) {
     ros::spinOnce();
 
-    if (!requests) {
+    if (!this->requests) {
       r.sleep();
       continue;
     }
 
     sendto_ts(this->uwb_fd, empty_buf, sizeof(empty_buf), 0,
-              (struct sockaddr *)&dst, sizeof(dst), &tx_timestamp);
+              (struct sockaddr *)&dst, sizeof(dst), &this->last_broadcast_ts);
 
     for (auto &client : this->clients) {
-      client.second.setTxTime(tx_timestamp);
+      if(client.second.initiator)
+      {
+        client.second.setTxTime(this->last_broadcast_ts);
+      }
     }
 
     r.sleep();
@@ -242,10 +245,12 @@ void ActiveRadarNodelet::recvThread() {
       continue;
     }
 
-    uint16_t client_addr = src.addr.short_addr;
+    uint16_t client_addr = src.addr.short_addr;    
 
     if (this->clients.find(client_addr) == this->clients.end()) {
       NODELET_INFO("New client detected: 0x%X", client_addr);
+
+      bool initiator = this->uwb_mac_addr > client_addr && this->requests;
 
       // create lambda function to this->rangeCB and pass it to Ranging client
 
@@ -253,7 +258,11 @@ void ActiveRadarNodelet::recvThread() {
         this->rangeCB(client_addr, range, std_dev);
       };
 
-      this->clients.emplace(client_addr, RangingClient(rangeCB));
+      this->clients.emplace(client_addr, RangingClient(rangeCB, initiator));
+      if(initiator)
+      {
+        this->clients[client_addr].setTxTime(this->last_broadcast_ts)
+      }
     }
 
     std::pair<std::vector<uint8_t>, uint64_t> tx =

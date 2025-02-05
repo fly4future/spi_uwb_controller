@@ -91,6 +91,13 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
     return std::make_pair(std::vector<uint8_t>(0), 0);
   }
 
+
+  // Ignore broadcast packet if i'm the initiator
+  if(this->initiator && ranging_pkt->packet_number % 2 == 0)
+  {
+    return std::make_pair(std::vector<uint8_t>(0), 0);
+  }
+
   ranging_pkt.RoundA = rxTime - this->txTime;
 
   if (ranging_pkt.packet_number >= 3) {
