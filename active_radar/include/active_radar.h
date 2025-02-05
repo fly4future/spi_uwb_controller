@@ -34,6 +34,8 @@ protected:
   int uwb_pan_id;
   bool requests;
 
+  double correction = 0;
+
   int uwb_fd;
 
   std::thread recv_thread;

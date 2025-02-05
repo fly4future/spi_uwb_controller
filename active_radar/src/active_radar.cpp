@@ -47,6 +47,8 @@ void ActiveRadarNodelet::onInit() {
   pl.loadParam("uwb_pan_id", this->uwb_pan_id);
   pl.loadParam("requests", this->requests);
 
+  pl.loadParam("measurement_correction", correction, double(-0.30));
+
   this->range_pub = this->nh.advertise<mrs_msgs::RangeWithCovarianceIdentified>("range", 1);
 
   if (!this->initUWB()) {
@@ -193,7 +195,7 @@ void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   range_msg->field_of_view = 2*M_PI;
   range_msg->min_range = 0.0;
   range_msg->max_range = 100.0;
-  range_msg->range = range;
+  range_msg->range = range + correction;
 
   msg.id = id;
   msg.variance = std_dev*std_dev;
