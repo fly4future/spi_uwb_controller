@@ -94,7 +94,7 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
 
   // Ignore even packets if i'm the initiator
   // and ignore odd packets if i'm the responder
-  if((this->initiator && ranging_pkt->packet_number % 2 == 0) || (!this->initiator && ranging_pkt->packet_number % 2 != 0))
+  if((this->initiator && ranging_pkt.packet_number % 2 == 0) || (!this->initiator && ranging_pkt.packet_number % 2 != 0))
   {
     return std::make_pair(std::vector<uint8_t>(0), 0);
   }

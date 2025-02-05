@@ -12,14 +12,14 @@ namespace active_radar {
 class RangingClient
 {
     private:
-        bool initiator;
-
         int expected_pkt_num = 0;
         uint64_t txTime;
 
         std::function<void(double, double)> range_cb;
 
     public:
+        bool initiator;
+
         RangingClient() : expected_pkt_num(-1) {}
         ~RangingClient() = default;
 

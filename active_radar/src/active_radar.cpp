@@ -261,7 +261,7 @@ void ActiveRadarNodelet::recvThread() {
       this->clients.emplace(client_addr, RangingClient(rangeCB, initiator));
       if(initiator)
       {
-        this->clients[client_addr].setTxTime(this->last_broadcast_ts)
+        this->clients[client_addr].setTxTime(this->last_broadcast_ts);
       }
     }
 
