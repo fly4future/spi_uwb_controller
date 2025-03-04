@@ -27,9 +27,14 @@ protected:
 
   std::string m_node_name;
 
+  uint64_t last_broadcast_ts;
+
   // UWB related settings
   int uwb_mac_addr;
   int uwb_pan_id;
+  bool requests;
+
+  double correction = 0;
 
   int uwb_fd;
 
