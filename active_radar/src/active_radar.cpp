@@ -64,14 +64,15 @@ void ActiveRadarNodelet::onInit() {
   NODELET_INFO("UWB initiliazed with MAC: 0x%X, PAN: 0x%X", this->uwb_mac_addr,
                this->uwb_pan_id);
 
+  this->clients = boost::container::flat_map<uint16_t, class RangingClient>();
+  this->running = true;
+
   this->recv_thread = std::thread(&ActiveRadarNodelet::recvThread, this);
   if (!this->recv_thread.joinable()) {
     NODELET_ERROR("Failed to start recv thread");
     return;
   }
 
-  this->clients = boost::container::flat_map<uint16_t, class RangingClient>();
-  this->running = true;
 
   uint8_t empty_buf[17 + 1] = {0};
   empty_buf[0] = RANGING_MSG_TYPE;
@@ -216,12 +217,9 @@ void ActiveRadarNodelet::recvThread() {
 
   uint64_t rx_ts;
 
-  while (true) {
+  while (this->running) {
     rc = recv_ts(this->uwb_fd, rx_buf, sizeof(rx_buf), 0,
                  (struct sockaddr *)&src, (socklen_t)sizeof(src), &rx_ts);
-
-    if (!this->running)
-      return;
 
     if (rc < 0) {
       if (errno == EAGAIN) {
