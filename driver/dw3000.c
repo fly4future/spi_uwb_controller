@@ -1121,9 +1121,6 @@ static void dw3000_xmit_work(struct work_struct *work) {
   struct sk_buff *skb = lp->tx_skb;
   struct skb_shared_info *shinfo = skb_shinfo(skb);
 
-  // write TX
-  rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, 0), skb->data, skb->len);
-
   u8 delayed_tx = shinfo->tx_flags & SKBTX_SCHED_TSTAMP;
   u8 request_ts = !delayed_tx && shinfo->tx_flags & SKBTX_HW_TSTAMP;
 
@@ -1137,18 +1134,45 @@ static void dw3000_xmit_work(struct work_struct *work) {
              << TX_FCTRL_TXB_OFFSET_BIT_OFFSET) |
             ((!!ranging) << TX_FCTRL_TR_BIT_OFFSET);
 
+  // write TX
+
   rc |= dw3000_modify32bit(lp, PARSE_ADDRESS(TX_FCTRL_ID, 0),
                            ~(TX_FCTRL_TXB_OFFSET_BIT_MASK |
                              TX_FCTRL_TR_BIT_MASK | TX_FCTRL_TXFLEN_BIT_MASK),
                            val);
 
-  if (delayed_tx) {
-    u32 ts = skb->skb_mstamp_ns;
-    ts = cpu_to_le32(ts);
-    rc |= dw3000_write32bit(lp, PARSE_ADDRESS(DX_TIME_ID, 0), ts);
+  if (delayed_tx && (skb->skb_mstamp_ns & (1ULL << 63))) {
+    rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, 0), skb->data, skb->len - 4);
 
     dw3000_write8bit(lp, PARSE_ADDRESS(SYS_STATUS_ID, 3),
                      (SYS_STATUS_HPDWARN_BIT_MASK >> 24));
+
+    u32 sys_time;
+    u64 rx_ts = skb->skb_mstamp_ns;
+                     
+    dw3000_write8bit(lp, PARSE_ADDRESS(SYS_TIME_ID, 0), 0x00);
+    dw3000_read32bit(lp, PARSE_ADDRESS(SYS_TIME_ID, 0), &sys_time);
+
+    u32 tx_time = sys_time + 125000;
+    tx_time &= 0xFFFFFFFE;
+    rc |= dw3000_write32bit(lp, PARSE_ADDRESS(DX_TIME_ID, 0), cpu_to_le32(tx_time));
+
+    u32 delay = ((u64)tx_time << 8) - rx_ts;
+    delay = cpu_to_le32(delay);
+
+    rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, skb->len - 4), &delay, 4);
+  }
+  else if(delayed_tx) {
+    u32 ts = skb->skb_mstamp_ns;
+    ts = cpu_to_le32(ts);
+    rc |= dw3000_write32bit(lp, PARSE_ADDRESS(DX_TIME_ID, 0), ts);
+    rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, 0), skb->data, skb->len);
+
+    dw3000_write8bit(lp, PARSE_ADDRESS(SYS_STATUS_ID, 3),
+                     (SYS_STATUS_HPDWARN_BIT_MASK >> 24));
+  }
+  else {
+    rc |= dw3000_write(lp, PARSE_ADDRESS(TX_BUFFER_ID, 0), skb->data, skb->len);
   }
 
   // write TX start
