@@ -24,11 +24,11 @@ bool ranging_pkt_decode(std::vector<uint8_t> &data, struct ranging_pkt_t *pkt) {
   pkt->packet_number = data[0];
   pkt->RoundB = (uint32_t)data[1] | (uint32_t)data[2] << 8 |
                 (uint32_t)data[3] << 16 | (uint32_t)data[4] << 24;
-  pkt->DelayB = (uint32_t)data[5] | (uint32_t)data[6] << 8 |
+  pkt->DelayA = (uint32_t)data[5] | (uint32_t)data[6] << 8 |
                 (uint32_t)data[7] << 16 | (uint32_t)data[8] << 24;
-  pkt->DelayA = (uint32_t)data[9] | (uint32_t)data[10] << 8 |
+  pkt->power = (uint32_t)data[9] | (uint32_t)data[10] << 8 |
                 (uint32_t)data[11] << 16 | (uint32_t)data[12] << 24;
-  pkt->power = (uint32_t)data[13] | (uint32_t)data[14] << 8 |
+  pkt->DelayB = (uint32_t)data[13] | (uint32_t)data[14] << 8 |
                (uint32_t)data[15] << 16 | (uint32_t)data[16] << 24;
 
   return true;
@@ -43,11 +43,6 @@ std::vector<uint8_t> ranging_pkt_encode(struct ranging_pkt_t *pkt) {
   data.push_back((uint8_t)((pkt->RoundA >> 16) & 0xFF));
   data.push_back((uint8_t)((pkt->RoundA >> 24) & 0xFF));
 
-  data.push_back((uint8_t)(pkt->DelayA & 0xFF));
-  data.push_back((uint8_t)((pkt->DelayA >> 8) & 0xFF));
-  data.push_back((uint8_t)((pkt->DelayA >> 16) & 0xFF));
-  data.push_back((uint8_t)((pkt->DelayA >> 24) & 0xFF));
-
   data.push_back((uint8_t)(pkt->DelayB & 0xFF));
   data.push_back((uint8_t)((pkt->DelayB >> 8) & 0xFF));
   data.push_back((uint8_t)((pkt->DelayB >> 16) & 0xFF));
@@ -57,6 +52,11 @@ std::vector<uint8_t> ranging_pkt_encode(struct ranging_pkt_t *pkt) {
   data.push_back(0x00);
   data.push_back(0x00);
   data.push_back(0x00);
+
+  data.push_back((uint8_t)(pkt->DelayA & 0xFF));
+  data.push_back((uint8_t)((pkt->DelayA >> 8) & 0xFF));
+  data.push_back((uint8_t)((pkt->DelayA >> 16) & 0xFF));
+  data.push_back((uint8_t)((pkt->DelayA >> 24) & 0xFF));
 
   return data;
 }
@@ -91,7 +91,6 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
     return std::make_pair(std::vector<uint8_t>(0), 0);
   }
 
-
   // Ignore even packets if i'm the initiator
   // and ignore odd packets if i'm the responder
   if((this->initiator && ranging_pkt.packet_number % 2 == 0) || (!this->initiator && ranging_pkt.packet_number % 2 != 0))
@@ -117,9 +116,8 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
 
   ranging_pkt.packet_number++;
 
-  this->txTime = rxTime + (12000 * UUS_TO_DWT_TIME);
-  this->txTime &= 0xfffffffe00;
-  ranging_pkt.DelayA = this->txTime - rxTime;
+  // Temporary placeholder that will be later filled by driver
+  ranging_pkt.DelayA = -1;
 
   std::vector<uint8_t> tx_vec = ranging_pkt_encode(&ranging_pkt);
 
