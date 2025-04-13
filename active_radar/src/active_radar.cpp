@@ -28,7 +28,11 @@ ActiveRadarNodelet::~ActiveRadarNodelet() {
   if (!(this->uwb_fd < 0))
     close(this->uwb_fd);
 
+  this->cond_var.notify_all();
+
   this->recv_thread.join();
+  this->send_thread.join();
+
   this->clients.clear();
 }
 
@@ -49,7 +53,8 @@ void ActiveRadarNodelet::onInit() {
 
   pl.loadParam("measurement_correction", correction, double(-0.30));
 
-  this->range_pub = this->nh.advertise<mrs_msgs::RangeWithCovarianceIdentified>("range", 1);
+  this->range_pub =
+      this->nh.advertise<mrs_msgs::RangeWithCovarianceIdentified>("range", 1);
 
   if (!this->initUWB()) {
     NODELET_ERROR("Failed to initialize UWB");
@@ -73,6 +78,11 @@ void ActiveRadarNodelet::onInit() {
     return;
   }
 
+  this->send_thread = std::thread(&ActiveRadarNodelet::sendThread, this);
+  if (!this->send_thread.joinable()) {
+    NODELET_ERROR("Failed to start send thread");
+    return;
+  }
 
   uint8_t empty_buf[17 + 1] = {0};
   empty_buf[0] = RANGING_MSG_TYPE;
@@ -100,8 +110,7 @@ void ActiveRadarNodelet::onInit() {
               (struct sockaddr *)&dst, sizeof(dst), &this->last_broadcast_ts);
 
     for (auto &client : this->clients) {
-      if(client.second.initiator)
-      {
+      if (client.second.initiator) {
         client.second.setTxTime(this->last_broadcast_ts);
       }
     }
@@ -184,6 +193,22 @@ bool ActiveRadarNodelet::setTSN() {
   return true;
 }
 
+void ActiveRadarNodelet::enqueueMsg(
+    uint16_t target_id, std::pair<std::vector<uint8_t>, uint64_t> tx_data,
+    int delay_ms) {
+  auto scheduled_time =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(delay_ms);
+
+  {
+    std::lock_guard<std::mutex> lock(this->queue_mutex);
+    this->tasks_.push(ScheduledMsg{scheduled_time, target_id, tx_data});
+  }
+
+  this->cond_var.notify_one();
+
+  return;
+}
+
 void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   NODELET_INFO("Range from 0x%X: %.2f m +- %f", id, range, std_dev);
 
@@ -193,17 +218,59 @@ void ActiveRadarNodelet::rangeCB(uint16_t id, double range, double std_dev) {
   range_msg->header.stamp = ros::Time::now();
   range_msg->header.frame_id = "uwb";
   range_msg->radiation_type = 3;
-  range_msg->field_of_view = 2*M_PI;
+  range_msg->field_of_view = 2 * M_PI;
   range_msg->min_range = 0.0;
   range_msg->max_range = 100.0;
   range_msg->range = range + correction;
 
   msg.id = id;
-  msg.variance = std_dev*std_dev;
+  msg.variance = std_dev * std_dev;
 
   this->range_pub.publish(msg);
 
   return;
+}
+
+void ActiveRadarNodelet::sendThread() {
+  while (this->running) {
+    {
+      std::unique_lock<std::mutex> lock(this->queue_mutex);
+
+      if (this->tasks_.empty()) {
+        this->cond_var.wait(
+            lock, [this]() { return !this->tasks_.empty() || !this->running; });
+      }
+      if (!this->running) {
+        break;
+      }
+
+      auto now = std::chrono::steady_clock::now();
+      auto nextTask = this->tasks_.top();
+      if (nextTask.time <= now) {
+        uint16_t target_id = nextTask.target_id;
+        auto tx_data = nextTask.tx_data;
+        this->tasks_.pop();
+
+        // Send the message to the target
+        struct sockaddr_ieee802154 dst;
+        memset(&dst, 0, sizeof(dst));
+        dst.family = AF_IEEE802154;
+        dst.addr.pan_id = this->uwb_pan_id;
+        dst.addr.addr_type = IEEE802154_ADDR_SHORT;
+        dst.addr.short_addr = target_id;
+
+        int rc =
+            sendto(this->uwb_fd, tx_data.first.data(), tx_data.first.size(), 0,
+                   (struct sockaddr *)&dst, sizeof(dst));
+        if (rc < 0) {
+          NODELET_ERROR("Failed to send packet");
+        }
+      } else {
+        // Wait until the scheduled time of the next task.
+        this->cond_var.wait_until(lock, nextTask.time);
+      }
+    }
+  }
 }
 
 void ActiveRadarNodelet::recvThread() {
@@ -245,12 +312,13 @@ void ActiveRadarNodelet::recvThread() {
       continue;
     }
 
-    uint16_t client_addr = src.addr.short_addr;    
+    uint16_t client_addr = src.addr.short_addr;
 
     if (this->clients.find(client_addr) == this->clients.end()) {
 
       bool initiator = this->uwb_mac_addr > client_addr && this->requests;
-      NODELET_INFO("New client detected: 0x%X | Switching to role of %s", client_addr, initiator ? "initiator" : "responder");
+      NODELET_INFO("New client detected: 0x%X | Switching to role of %s",
+                   client_addr, initiator ? "initiator" : "responder");
 
       // create lambda function to this->rangeCB and pass it to Ranging client
 
@@ -259,8 +327,7 @@ void ActiveRadarNodelet::recvThread() {
       };
 
       this->clients.emplace(client_addr, RangingClient(rangeCB, initiator));
-      if(initiator)
-      {
+      if (initiator) {
         this->clients[client_addr].setTxTime(this->last_broadcast_ts);
       }
     }
