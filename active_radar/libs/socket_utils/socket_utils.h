@@ -40,6 +40,10 @@ ssize_t sendto_delayed(int __fd, const void *__buf, size_t __n, int __flags,
                        const struct sockaddr *__addr, socklen_t __addr_len,
                        uint64_t txtime);
 
+ssize_t sendto_delayed_ts(int __fd, const void *__buf, size_t __n, int __flags,
+                       const struct sockaddr *__addr, socklen_t __addr_len,
+                       uint64_t reftime, uint64_t *txtime);
+
 ssize_t sendto_ts(int __fd, const void *__buf, size_t __n, int __flags,
                   const struct sockaddr *__addr, socklen_t __addr_len,
                   uint64_t *txtime);

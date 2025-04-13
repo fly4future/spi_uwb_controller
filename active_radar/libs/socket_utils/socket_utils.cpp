@@ -39,6 +39,104 @@ ssize_t sendto_delayed(int __fd, const void *__buf, size_t __n, int __flags,
   return sendmsg(__fd, &msg, __flags);
 }
 
+ssize_t sendto_delayed_ts(int __fd, const void *__buf, size_t __n, int __flags,
+  const struct sockaddr *__addr, socklen_t __addr_len,
+  uint64_t reftime, uint64_t *txtime)
+{
+  struct msghdr msg;
+  struct iovec iov;
+  char cmsg_buf[CMSG_SPACE(sizeof(u_int64_t))];
+
+  memset(&msg, 0, sizeof(msg));
+  memset(&iov, 0, sizeof(iov));
+  memset(cmsg_buf, 0, sizeof(cmsg_buf));
+
+  msg.msg_name = (void *)__addr;
+  msg.msg_namelen = __addr_len;
+
+  iov.iov_base = (void *)__buf;
+  iov.iov_len = __n;
+
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+
+  msg.msg_control = cmsg_buf;
+  msg.msg_controllen = sizeof(cmsg_buf);
+
+  struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SO_TXTIME;
+  cmsg->cmsg_len = CMSG_LEN(sizeof(uint64_t));
+
+  memcpy(CMSG_DATA(cmsg), &reftime, sizeof(uint64_t));
+
+  int ret = sendmsg(__fd, &msg, __flags);
+
+  if (ret < 0)
+    return ret;
+
+  struct msghdr msg;
+  struct iovec iov;
+  char cmsg_buf[256];
+  char rx_buf[MAX_PACKET_LEN + 1];
+
+  memset(&msg, 0, sizeof(msg));
+  memset(&iov, 0, sizeof(iov));
+  memset(cmsg_buf, 0, sizeof(cmsg_buf));
+
+  msg.msg_name = (void *)__addr;
+  msg.msg_namelen = __addr_len;
+
+  iov.iov_base = rx_buf;
+  iov.iov_len = sizeof(rx_buf);
+
+  msg.msg_iov = &iov;
+  msg.msg_iovlen = 1;
+
+  msg.msg_control = cmsg_buf;
+  msg.msg_controllen = sizeof(cmsg_buf);
+
+  fd_set rfds;
+
+  FD_ZERO(&rfds);
+  FD_SET(__fd, &rfds);
+
+  struct timeval tv;
+  fd_set set;
+  tv.tv_sec = 0;
+  tv.tv_usec = 500 * 1000;
+
+  ret = select(__fd + 1, &rfds, NULL, NULL, &tv);
+
+  if (ret < 0) {
+    printf("select error\n");
+    return ret;
+  }
+
+  *txtime = -1;
+
+  while((ret = recvmsg(__fd, &msg, MSG_ERRQUEUE)))
+  {
+    if (ret < 0 || txtime == NULL)
+      return 0;
+
+    struct cmsghdr *cmsg;
+
+    for (cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
+        cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+      if (cmsg->cmsg_level == SOL_SOCKET &&
+          cmsg->cmsg_type == SO_TIMESTAMPING_NEW) {
+        struct timespec *timestamp = (struct timespec *)CMSG_DATA(cmsg);
+        *txtime = (timestamp[2].tv_sec * 1000000000L) + timestamp[2].tv_nsec;
+      }
+    }
+  }
+
+  return ret;
+}
+
+
 ssize_t sendto_ts(int __fd, const void *__buf, size_t __n, int __flags,
                   const struct sockaddr *__addr, socklen_t __addr_len,
                   uint64_t *txtime) {
