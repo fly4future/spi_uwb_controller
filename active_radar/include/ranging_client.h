@@ -30,7 +30,7 @@ class RangingClient
             this->initiator = initiator;
         }
 
-        std::pair<std::vector<uint8_t>, uint64_t> update(std::vector<uint8_t>& rx_vec, uint64_t rxTime);
+        std::pair<std::pair<std::vector<uint8_t>, uint64_t>, int> update(std::vector<uint8_t>& rx_vec, uint64_t rxTime);
 
         void setTxTime(uint64_t txTime) { this->txTime = txTime; }
 

@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <random>
+
 #define DWT_TIME_UNITS ((double)15.65e-12) //!< = 15.65e-12 s
 #define SPEED_OF_LIGHT ((double)299702547.0)
 #define UUS_TO_DWT_TIME 64267
@@ -83,19 +85,19 @@ double ToF_DS(const struct ranging_pkt_t *data) {
 
 namespace active_radar {
 
-std::pair<std::vector<uint8_t>, uint64_t>
+std::pair<std::pair<std::vector<uint8_t>, uint64_t>, int>
 RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
   struct ranging_pkt_t ranging_pkt = {0, 0, 0, 0, 0, 0};
 
   if (!ranging_pkt_decode(rx_vec, &ranging_pkt)) {
-    return std::make_pair(std::vector<uint8_t>(0), 0);
+    return std::make_pair(std::make_pair(std::vector<uint8_t>(0), 0), 0);
   }
 
   // Ignore even packets if i'm the initiator
   // and ignore odd packets if i'm the responder
   if((this->initiator && ranging_pkt.packet_number % 2 == 0) || (!this->initiator && ranging_pkt.packet_number % 2 != 0))
   {
-    return std::make_pair(std::vector<uint8_t>(0), 0);
+    return std::make_pair(std::make_pair(std::vector<uint8_t>(0), 0), 0);
   }
 
   ranging_pkt.RoundA = rxTime - this->txTime;
@@ -111,7 +113,7 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
 
   if (ranging_pkt.packet_number >= 4)
   {
-    return std::make_pair(std::vector<uint8_t>(0), 0);
+    return std::make_pair(std::make_pair(std::vector<uint8_t>(0), 0), 0);
   }
 
   ranging_pkt.packet_number++;
@@ -121,7 +123,22 @@ RangingClient::update(std::vector<uint8_t> &rx_vec, uint64_t rxTime) {
 
   std::vector<uint8_t> tx_vec = ranging_pkt_encode(&ranging_pkt);
 
-  return std::make_pair(tx_vec, this->txTime >> 8);
+  auto tx_data = std::make_pair(tx_vec, rxTime);
+
+  int planned_delay = 0;
+
+  // We will delay only the first packet for now by some random delay :D
+  // Some experimentation need to be done to find the best comabinations
+  if(ranging_pkt.packet_number == 1)
+  {
+    std::random_device rd;  // a seed source for the random number engine
+    std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+    std::uniform_int_distribution<> distrib(0, 30);
+ 
+    planned_delay = distrib(gen);
+  }
+
+  return std::make_pair(tx_data, planned_delay);
 }
 
 } // namespace active_radar

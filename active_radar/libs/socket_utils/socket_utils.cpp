@@ -76,9 +76,6 @@ ssize_t sendto_delayed_ts(int __fd, const void *__buf, size_t __n, int __flags,
   if (ret < 0)
     return ret;
 
-  struct msghdr msg;
-  struct iovec iov;
-  char cmsg_buf[256];
   char rx_buf[MAX_PACKET_LEN + 1];
 
   memset(&msg, 0, sizeof(msg));

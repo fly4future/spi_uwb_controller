@@ -5,6 +5,7 @@
 #include <socket_utils.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "active_radar.h"
@@ -259,15 +260,20 @@ void ActiveRadarNodelet::sendThread() {
         dst.addr.addr_type = IEEE802154_ADDR_SHORT;
         dst.addr.short_addr = target_id;
 
+        uint64_t tx_timestamp;
+
         int rc =
-            sendto(this->uwb_fd, tx_data.first.data(), tx_data.first.size(), 0,
-                   (struct sockaddr *)&dst, sizeof(dst));
+            sendto_delayed_ts(this->uwb_fd, tx_data.first.data(),
+                              tx_data.first.size(), 0, (struct sockaddr *)&dst,
+                              sizeof(dst), tx_data.second | ((ulong)1 << 63), &tx_timestamp);
         if (rc < 0) {
           NODELET_ERROR("Failed to send packet");
         }
-      } else {
-        // Wait until the scheduled time of the next task.
-        this->cond_var.wait_until(lock, nextTask.time);
+        else {
+          this->clients[target_id].setTxTime(tx_timestamp);
+          // Wait until the scheduled time of the next task.
+          this->cond_var.wait_until(lock, nextTask.time);
+        }
       }
     }
   }
@@ -332,19 +338,20 @@ void ActiveRadarNodelet::recvThread() {
       }
     }
 
-    std::pair<std::vector<uint8_t>, uint64_t> tx =
+    std::pair<std::pair<std::vector<uint8_t>, uint64_t>, int> tx =
         this->clients[client_addr].update(rx_vec, rx_ts);
+
+    std::pair<std::vector<uint8_t>, uint64_t> tx_data = tx.first;
+    int planned_delay = tx.second;
 
     // insert packet info to the beginning
 
-    if (tx.first.size() > 0) {
-      tx.first.insert(tx.first.begin(), RANGING_MSG_TYPE);
+    if (tx_data.first.size() > 0) {
+      tx_data.first.insert(tx_data.first.begin(), RANGING_MSG_TYPE);
 
-      rc = sendto_delayed(this->uwb_fd, tx.first.data(), tx.first.size(), 0,
-                          (struct sockaddr *)&src, sizeof(src), tx.second);
-      if (rc < 0) {
-        NODELET_ERROR("Failed to send packet");
-      }
+      this->enqueueMsg(client_addr, tx_data, planned_delay);
+      NODELET_INFO("Enqueued message to 0x%X with delay %d ms", client_addr,
+                   planned_delay);
     }
   }
 }
